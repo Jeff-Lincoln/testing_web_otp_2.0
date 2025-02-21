@@ -159,6 +159,278 @@
         </div>
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const otpInputs = document.querySelectorAll('.otp-input');
+            const completeOtpInput = document.getElementById('complete-otp');
+            const form = document.getElementById('otpForm');
+            const statusMessage = document.getElementById('statusMessage');
+            
+            // Set up OTP input fields behavior
+            otpInputs.forEach((input, index) => {
+                // Move to next input when a digit is entered
+                input.addEventListener('input', function() {
+                    if (this.value.length === 1 && index < otpInputs.length - 1) {
+                        otpInputs[index + 1].focus();
+                    }
+                    updateCompleteOtp();
+                });
+                
+                // Handle backspace to go to previous input
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Backspace' && !this.value && index > 0) {
+                        otpInputs[index - 1].focus();
+                    }
+                });
+                
+                // Only allow numbers
+                input.addEventListener('keypress', function(e) {
+                    if (!/^\d$/.test(e.key)) {
+                        e.preventDefault();
+                    }
+                });
+                
+                // Prevent paste
+                input.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                });
+            });
+            
+            // Compile the OTP from individual inputs
+            function updateCompleteOtp() {
+                let otp = '';
+                otpInputs.forEach(input => {
+                    otp += input.value;
+                });
+                completeOtpInput.value = otp;
+            }
+            
+            // Handle form submission
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                const otp = completeOtpInput.value;
+                
+                if (otp.length === 6 && /^\d+$/.test(otp)) {
+                    statusMessage.textContent = "Verification successful!";
+                    statusMessage.className = "status-message success";
+                    // In a real app, you would make an API call here to verify the OTP
+                } else {
+                    statusMessage.textContent = "Please enter a valid 6-digit code";
+                    statusMessage.className = "status-message error";
+                }
+            });
+            
+            // Set up WebOTP API for automatic OTP detection
+            if ('OTPCredential' in window) {
+                const ac = new AbortController();
+                form.addEventListener('submit', () => ac.abort());
+                
+                navigator.credentials.get({
+                    otp: { transport: ['sms'] },
+                    signal: ac.signal
+                }).then(otp => {
+                    if (otp && otp.code) {
+                        completeOtpInput.value = otp.code;
+                        otpInputs.forEach((input, i) => {
+                            input.value = otp.code.charAt(i);
+                            input.classList.add('auto-detected');
+                        });
+                        statusMessage.textContent = "OTP automatically detected!";
+                        statusMessage.className = "status-message success";
+                        setTimeout(() => form.dispatchEvent(new Event('submit')), 1000);
+                    }
+                }).catch(err => {
+                    console.log('WebOTP error:', err);
+                });
+            }
+
+            // Fallback for SMS listening on Android using the Notification API
+            if ('Notification' in window && 'serviceWorker' in navigator) {
+                Notification.requestPermission().then(permission => {
+                    if (permission === 'granted') {
+                        navigator.serviceWorker.register('otp-sw.js');
+                        navigator.serviceWorker.addEventListener('message', function(event) {
+                            if (event.data && event.data.type === 'OTP') {
+                                const otpCode = event.data.code;
+                                completeOtpInput.value = otpCode;
+                                otpInputs.forEach((input, i) => {
+                                    input.value = otpCode.charAt(i);
+                                    input.classList.add('auto-detected');
+                                });
+                                statusMessage.textContent = "OTP automatically detected!";
+                                statusMessage.className = "status-message success";
+                            }
+                        });
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="apple-itunes-app" content="app-id=myAppStoreID, app-argument=myURL">
+    <meta name="google-site-verification" content="..." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTP Verification</title>
+    <style>
+        :root {
+            --primary-color: #4a6fff;
+            --secondary-color: #f8f9fa;
+            --text-color: #333;
+            --success-color: #28a745;
+            --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        body {
+            font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #f2f5f9;
+            color: var(--text-color);
+        }
+        
+        .container {
+            background-color: white;
+            border-radius: 12px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .otp-description {
+            margin-bottom: 2rem;
+            color: #666;
+            font-size: 0.95rem;
+        }
+        
+        .otp-area {
+            width: 100%;
+            margin-bottom: 1.5rem;
+        }
+        
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        label {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            display: block;
+            text-align: left;
+        }
+        
+        .otp-input-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+        
+        .otp-input {
+            width: 3rem;
+            height: 3.5rem;
+            font-size: 1.5rem;
+            text-align: center;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            background-color: var(--secondary-color);
+            transition: border-color 0.3s;
+        }
+        
+        .otp-input:focus {
+            border-color: var(--primary-color);
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(74, 111, 255, 0.25);
+        }
+        
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0.8rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+        
+        button:hover {
+            background-color: #3a5be0;
+        }
+        
+        button:active {
+            transform: translateY(1px);
+        }
+        
+        .status-message {
+            margin-top: 1rem;
+            font-weight: 500;
+            height: 1.5rem;
+        }
+        
+        .success {
+            color: var(--success-color);
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+        
+        .auto-detected {
+            animation: highlight 2s ease-out;
+        }
+        
+        @keyframes highlight {
+            0% { background-color: rgba(74, 111, 255, 0.2); }
+            100% { background-color: var(--secondary-color); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OTP Verification</h1>
+        <p class="otp-description">We've sent a verification code to your device. Enter the code below to complete verification.</p>
+        
+        <div class="otp-area">
+            <form id="otpForm" method="POST">
+                <label for="otp-input">Enter verification code:</label>
+                <div class="otp-input-container">
+                    <input type="text" class="otp-input" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="OTP digit 1">
+                    <input type="text" class="otp-input" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="OTP digit 2">
+                    <input type="text" class="otp-input" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="OTP digit 3">
+                    <input type="text" class="otp-input" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="OTP digit 4">
+                    <input type="text" class="otp-input" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="OTP digit 5">
+                    <input type="text" class="otp-input" maxlength="1" autocomplete="off" inputmode="numeric" aria-label="OTP digit 6">
+                </div>
+
+                <input type="hidden" id="complete-otp" name="otp" autocomplete="one-time-code">
+                <button type="submit">Verify</button>
+            </form>
+            <p class="status-message" id="statusMessage"></p>
+        </div>
+    </div>
+
     <script src="otp-detector.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -244,7 +516,6 @@
                     console.log('WebOTP error:', err);
                 });
             }
-            
             // Fallback for SMS listening on Android using the Notification API
             if ('Notification' in window && 'serviceWorker' in navigator) {
                 Notification.requestPermission().then(permission => {
@@ -604,4 +875,4 @@
     </div>
 
     <script src="index.js"></script>
-</body> --> -->
+</body> --> --> -->
